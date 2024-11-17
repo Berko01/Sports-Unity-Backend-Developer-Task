@@ -23,8 +23,6 @@ public class User {
     @NotNull(message = "Role cannot be null")
     private Role role;
 
-    public enum Role {
-        STANDARD, COMPANY_ADMIN, SUPER_USER
-    }
+
 }
 
