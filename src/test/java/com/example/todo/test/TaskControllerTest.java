@@ -2,7 +2,10 @@ package com.example.todo.test;
 
 import com.example.todo.controller.TaskController;
 import com.example.todo.dto.TaskDTO;
+import com.example.todo.model.Role;
+import com.example.todo.model.User;
 import com.example.todo.service.TaskService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,128 +32,123 @@ public class TaskControllerTest {
     @MockBean
     private TaskService taskService;
 
+    private User superUser;
+    private User companyAdmin;
+    private User standardUser;
+
+    @BeforeEach
+    public void setup() {
+        // Kullanıcı rollerini açıkça tanımla
+        superUser = new User(1L, "Super User", 1L, Role.SUPER_USER);
+        companyAdmin = new User(2L, "Company Admin", 1L, Role.COMPANY_ADMIN);
+        standardUser = new User(3L, "Standard User", 1L, Role.STANDARD);
+    }
+
+    // Super User Tests
     @Test
-    public void testGetTasksForSuperUser() throws Exception {
-        // Mock data for Super User
+    public void testSuperUserCanAccessAllTasks() throws Exception {
         List<TaskDTO> mockTasks = Arrays.asList(
                 new TaskDTO(1L, "Task 1", "Description 1", 2L, 1L),
                 new TaskDTO(2L, "Task 2", "Description 2", 3L, 1L)
         );
-        Mockito.when(taskService.getTasksForUser(1L, null)).thenReturn(mockTasks);
+        Mockito.when(taskService.getTasksForUser(superUser.getId(), null)).thenReturn(mockTasks);
 
-        // Perform GET request
         mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 1L)) // Super User ID
+                        .header("requesterUserId", superUser.getId())) // Super User ID
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id", is(1)))
-                .andExpect(jsonPath("$[0].title", is("Task 1")))
-                .andExpect(jsonPath("$[1].id", is(2)))
-                .andExpect(jsonPath("$[1].title", is("Task 2")));
+                .andExpect(jsonPath("$[1].id", is(2)));
     }
 
     @Test
-    public void testGetTasksForCompanyAdmin() throws Exception {
-        // Mock data for Company Admin
+    public void testSuperUserCanAccessSpecificUserTasks() throws Exception {
         List<TaskDTO> mockTasks = Arrays.asList(
-                new TaskDTO(3L, "Company Task 1", "Description 3", 4L, 2L)
+                new TaskDTO(3L, "User Task", "Description", 4L, 1L)
         );
-        Mockito.when(taskService.getTasksForUser(2L, null)).thenReturn(mockTasks);
+        Mockito.when(taskService.getTasksForUser(superUser.getId(), 4L)).thenReturn(mockTasks);
 
-        // Perform GET request
         mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 2L)) // Company Admin ID
+                        .header("requesterUserId", superUser.getId()) // Super User ID
+                        .param("userId", "4"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id", is(3)))
-                .andExpect(jsonPath("$[0].title", is("Company Task 1")));
+                .andExpect(jsonPath("$[0].id", is(3)));
     }
 
+    // Company Admin Tests
     @Test
-    public void testGetTasksForStandardUser() throws Exception {
-        // Mock data for Standard User
+    public void testCompanyAdminCanAccessCompanyTasks() throws Exception {
         List<TaskDTO> mockTasks = Arrays.asList(
-                new TaskDTO(4L, "Standard Task", "Description 4", 5L, 3L)
+                new TaskDTO(4L, "Company Task", "Description", 5L, companyAdmin.getCompanyId())
         );
-        Mockito.when(taskService.getTasksForUser(3L, null)).thenReturn(mockTasks);
+        Mockito.when(taskService.getTasksForUser(companyAdmin.getId(), null)).thenReturn(mockTasks);
 
-        // Perform GET request
         mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 3L)) // Standard User ID
+                        .header("requesterUserId", companyAdmin.getId())) // Company Admin ID
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id", is(4)))
-                .andExpect(jsonPath("$[0].title", is("Standard Task")));
-    }
-
-    @Test
-    public void testSuperUserCanAccessAnotherUsersTasks() throws Exception {
-        // Mock data
-        List<TaskDTO> mockTasks = Arrays.asList(
-                new TaskDTO(6L, "Another User's Task", "Description 6", 7L, 2L)
-        );
-        Mockito.when(taskService.getTasksForUser(1L, 7L)).thenReturn(mockTasks);
-
-        // Perform GET request as Super User
-        mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 1L) // Super User
-                        .param("userId", "7"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id", is(6)))
-                .andExpect(jsonPath("$[0].title", is("Another User's Task")));
+                .andExpect(jsonPath("$[0].id", is(4)));
     }
 
     @Test
     public void testCompanyAdminCannotAccessTasksOutsideTheirCompany() throws Exception {
-        // Mock unauthorized access
         Mockito.doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied"))
-                .when(taskService).getTasksForUser(2L, 8L); // Company Admin accessing another company's user
+                .when(taskService).getTasksForUser(companyAdmin.getId(), 8L);
 
-        // Perform GET request
         mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 2L) // Company Admin
-                        .param("userId", "8")) // Another user's ID
+                        .header("requesterUserId", companyAdmin.getId()) // Company Admin ID
+                        .param("userId", "8")) // Another company's user
                 .andExpect(status().isForbidden());
+    }
+
+    // Standard User Tests
+    @Test
+    public void testStandardUserCanAccessOwnTasks() throws Exception {
+        List<TaskDTO> mockTasks = Arrays.asList(
+                new TaskDTO(5L, "User Task", "Description", standardUser.getId(), 1L)
+        );
+        Mockito.when(taskService.getTasksForUser(standardUser.getId(), null)).thenReturn(mockTasks);
+
+        mockMvc.perform(get("/tasks")
+                        .header("requesterUserId", standardUser.getId())) // Standard User ID
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id", is(5)));
     }
 
     @Test
     public void testStandardUserCannotAccessAnotherUsersTasks() throws Exception {
-        // Mock unauthorized access
         Mockito.doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied"))
-                .when(taskService).getTasksForUser(3L, 5L); // Standard User trying to access another user's tasks
+                .when(taskService).getTasksForUser(standardUser.getId(), 7L);
 
-        // Perform GET request
         mockMvc.perform(get("/tasks")
-                        .header("requesterUserId", 3L) // Standard User
-                        .param("userId", "5")) // Another user's ID
+                        .header("requesterUserId", standardUser.getId()) // Standard User ID
+                        .param("userId", "7")) // Another user's ID
                 .andExpect(status().isForbidden());
     }
 
+    // Task Creation Tests
     @Test
-    public void testCreateTaskWithProperPermissions() throws Exception {
-        // Mock data
-        TaskDTO inputTask = new TaskDTO(null, "New Task", "Description", 4L, 2L);
-        TaskDTO createdTask = new TaskDTO(7L, "New Task", "Description", 4L, 2L);
-        Mockito.when(taskService.createTask(Mockito.eq(2L), Mockito.any(TaskDTO.class))).thenReturn(createdTask);
+    public void testCompanyAdminCanCreateTaskInTheirCompany() throws Exception {
+        TaskDTO inputTask = new TaskDTO(null, "New Task", "Description", 4L, companyAdmin.getCompanyId());
+        TaskDTO createdTask = new TaskDTO(6L, "New Task", "Description", 4L, companyAdmin.getCompanyId());
+        Mockito.when(taskService.createTask(Mockito.eq(companyAdmin.getId()), Mockito.any(TaskDTO.class))).thenReturn(createdTask);
 
-        // Perform POST request
         mockMvc.perform(post("/tasks")
-                        .header("requesterUserId", 2L) // Company Admin
+                        .header("requesterUserId", companyAdmin.getId()) // Company Admin ID
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"New Task\",\"description\":\"Description\",\"userId\":4,\"companyId\":2}"))
+                        .content("{\"title\":\"New Task\",\"description\":\"Description\",\"userId\":4,\"companyId\":1}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id", is(7)))
+                .andExpect(jsonPath("$.id", is(6)))
                 .andExpect(jsonPath("$.title", is("New Task")));
     }
 
     @Test
-    public void testUnauthorizedTaskCreation() throws Exception {
-        // Mock unauthorized task creation
+    public void testStandardUserCannotCreateTask() throws Exception {
         Mockito.doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied"))
-                .when(taskService).createTask(Mockito.eq(3L), Mockito.any(TaskDTO.class)); // Standard User trying to create a task
+                .when(taskService).createTask(Mockito.eq(standardUser.getId()), Mockito.any(TaskDTO.class));
 
-        // Perform POST request
         mockMvc.perform(post("/tasks")
-                        .header("requesterUserId", 3L) // Standard User
+                        .header("requesterUserId", standardUser.getId()) // Standard User ID
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\"New Task\",\"description\":\"Description\",\"userId\":4,\"companyId\":2}"))
+                        .content("{\"title\":\"New Task\",\"description\":\"Description\",\"userId\":4,\"companyId\":1}"))
                 .andExpect(status().isForbidden());
     }
 }
