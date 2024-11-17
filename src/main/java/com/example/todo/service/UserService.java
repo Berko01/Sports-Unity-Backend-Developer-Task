@@ -4,6 +4,7 @@ import com.example.todo.dto.UserDTO;
 import com.example.todo.model.Role;
 import com.example.todo.model.User;
 import com.example.todo.repository.UserRepository;
+import com.example.todo.util.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,27 +18,28 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserMapper userMapper;
 
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll()
                 .stream()
-                .map(this::toDTO)
+                .map(userMapper::toDTO) // Delegates to UserMapper
                 .collect(Collectors.toList());
     }
 
     public UserDTO getUserById(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        return toDTO(user);
+        return userMapper.toDTO(user); // Delegates to UserMapper
     }
 
     public UserDTO createUser(UserDTO userDTO) {
         validateUserDTO(userDTO);
 
-        User user = toEntity(userDTO);
+        User user = userMapper.toEntity(userDTO); // Delegates to UserMapper
         User savedUser = userRepository.save(user);
 
-        return toDTO(savedUser);
+        return userMapper.toDTO(savedUser); // Delegates to UserMapper
     }
 
     public UserDTO updateUser(Long userId, UserDTO userDTO) {
@@ -52,7 +54,7 @@ public class UserService {
 
         User updatedUser = userRepository.save(existingUser);
 
-        return toDTO(updatedUser);
+        return userMapper.toDTO(updatedUser); // Delegates to UserMapper
     }
 
     public void deleteUser(Long userId) {
@@ -81,23 +83,5 @@ public class UserService {
         } catch (IllegalArgumentException e) {
             return false;
         }
-    }
-
-    private UserDTO toDTO(User user) {
-        return new UserDTO(
-                user.getId(),
-                user.getUsername(),
-                user.getCompanyId(),
-                user.getRole().name()
-        );
-    }
-
-    private User toEntity(UserDTO userDTO) {
-        return new User(
-                null, // ID veri tabanı tarafından atanır
-                userDTO.getUsername(),
-                userDTO.getCompanyId(),
-                Role.valueOf(userDTO.getRole())
-        );
     }
 }

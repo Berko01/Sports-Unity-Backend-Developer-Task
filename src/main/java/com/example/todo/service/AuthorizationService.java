@@ -27,25 +27,21 @@ public class AuthorizationService {
     }
 
     public boolean canAccessUserTasks(Long requesterUserId, Long targetUserId) {
-        // Fetch requester and target user details from the repository
         User requester = userRepository.findById(requesterUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Requester User not found"));
 
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target User not found"));
 
-        // Super User can access anyone's tasks
         if (requester.getRole() == Role.SUPER_USER) {
             return true;
         }
 
-        // Company Admin can access tasks of users in their company
         if (requester.getRole() == Role.COMPANY_ADMIN &&
                 requester.getCompanyId().equals(targetUser.getCompanyId())) {
             return true;
         }
 
-        // Standard User can only access their own tasks
         return requesterUserId.equals(targetUserId);
     }
 
