@@ -1,8 +1,10 @@
 package com.example.todo.controller;
 
+import com.example.todo.dto.TaskDTO;
+import com.example.todo.util.Mapper;
+import com.example.todo.model.User;
 import com.example.todo.service.TaskService;
 import com.example.todo.model.Task;
-import com.example.todo.model.User;
 import com.example.todo.repository.InMemoryRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -24,9 +26,11 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> getTasks(@RequestHeader Long requesterUserId, @RequestParam(required = false) Long userId) {
+    public List<TaskDTO> getTasks(@RequestHeader Long requesterUserId, @RequestParam(required = false) Long userId) {
         User requester = repository.findUserById(requesterUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Requester User not found"));
+
+        List<Task> tasks;
 
         if (userId != null) {
             User targetUser = repository.findUserById(userId)
@@ -37,25 +41,30 @@ public class TaskController {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this user's tasks");
             }
 
-            return taskService.getTasksForUser(targetUser);
+            tasks = taskService.getTasksForUser(targetUser);
+        } else {
+            tasks = taskService.getTasksForUser(requester);
         }
 
-        return taskService.getTasksForUser(requester);
+        // Map tasks to TaskDTOs
+        return tasks.stream().map(Mapper::toTaskDTO).toList();
     }
 
     @PostMapping
-    public ResponseEntity<Task> createTask(@Valid @RequestBody Task task) {
+    public ResponseEntity<TaskDTO> createTask(@Valid @RequestBody Task task) {
         Task savedTask = taskService.createTask(task);
-        return ResponseEntity.ok(savedTask);
+        TaskDTO taskDTO = Mapper.toTaskDTO(savedTask);
+        return ResponseEntity.ok(taskDTO);
     }
 
     @DeleteMapping("/{taskId}")
-    public ResponseEntity<Task> deleteTask(@PathVariable Long taskId) {
+    public ResponseEntity<TaskDTO> deleteTask(@PathVariable Long taskId) {
         Task task = repository.findTaskById(taskId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
         taskService.deleteTask(taskId);
-        return ResponseEntity.ok(task);
+        TaskDTO taskDTO = Mapper.toTaskDTO(task);
+        return ResponseEntity.ok(taskDTO);
     }
 
     private boolean canAccessUserTasks(User requester, User targetUser) {
@@ -71,5 +80,3 @@ public class TaskController {
         return requester.getId().equals(targetUser.getId());
     }
 }
-
-
